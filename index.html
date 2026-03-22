@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project 3: Attention and Transformers</title>
+<style>
+  :root { --accent: #2563eb; --bg: #fafbfc; --card: #fff; --text: #1a1a2e; --muted: #6b7280; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+  .container { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }
+  h1 { font-size: 2rem; margin-bottom: 0.3rem; }
+  h2 { font-size: 1.5rem; margin: 2.5rem 0 1rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.15rem; margin: 1.8rem 0 0.6rem; color: var(--accent); }
+  p { margin-bottom: 1rem; }
+  .meta { color: var(--muted); margin-bottom: 2rem; }
+  img { max-width: 100%; height: auto; border: 1px solid #e5e7eb; border-radius: 6px; margin: 1rem 0; }
+  .img-row { display: flex; flex-wrap: wrap; gap: 1rem; }
+  .img-row img { flex: 1 1 45%; min-width: 280px; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0 1.5rem; font-size: 0.92rem; }
+  th, td { border: 1px solid #d1d5db; padding: 0.45rem 0.7rem; text-align: left; }
+  th { background: #f3f4f6; font-weight: 600; }
+  tr.avg td { background: #eff6ff; }
+  caption { font-weight: 600; margin-bottom: 0.4rem; text-align: left; font-size: 0.95rem; }
+  code { background: #f3f4f6; padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.88em; }
+  .eq { text-align: center; margin: 1rem 0; font-style: italic; }
+  .card { background: var(--card); border: 1px solid #e5e7eb; border-radius: 8px; padding: 1.2rem 1.5rem; margin: 1rem 0; }
+  .highlight { background: #eff6ff; border-left: 4px solid var(--accent); padding: 0.8rem 1rem; margin: 1rem 0; border-radius: 0 6px 6px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Project 3: Attention and Transformers</h1>
+<p class="meta">Haopeng Chen &middot; CSCI 689 &middot; Spring 2026 &middot; University of Mississippi</p>
+
+<p>
+This project explores the core building blocks of modern attention-based architectures for neural machine translation on an English&ndash;French dataset.
+We implement three progressively more powerful models: (1)&nbsp;a GRU-based encoder-decoder with <strong>Bahdanau additive attention</strong>,
+(2)&nbsp;the same architecture with <strong>multi-head scaled dot-product attention</strong>,
+and (3)&nbsp;a full <strong>Transformer</strong> encoder-decoder.
+Each model is trained, evaluated (BLEU), and analysed through attention visualisations and ablation studies.
+</p>
+
+<!-- ============================================================ -->
+<h2>Part 1: Bahdanau Attention Mechanism</h2>
+
+<h3>Architecture</h3>
+<p>
+The encoder is a multi-layer GRU that reads the source sentence and produces a hidden state at every time step.
+The Bahdanau additive attention mechanism computes an alignment score between the decoder's current hidden state
+<em>s<sub>t&minus;1</sub></em> (the query) and each encoder hidden state <em>h<sub>i</sub></em> (the keys):
+</p>
+<p class="eq">e<sub>t,i</sub> = v<sup>T</sup> tanh(W<sub>q</sub> s<sub>t&minus;1</sub> + W<sub>k</sub> h<sub>i</sub>)</p>
+<p>
+After softmax normalisation (with padding masked), the resulting attention weights produce a context vector
+via a weighted sum over encoder outputs. The decoder GRU then receives the concatenation of the target embedding
+and this context vector at each step, allowing it to dynamically focus on relevant source positions.
+</p>
+
+<h3>Task 1: Hyperparameter Tuning</h3>
+<p>We train four configurations varying embedding size, hidden size, GRU depth, learning rate, and dropout. All models are trained for 50 epochs on the English&ndash;French dataset with batch size 128.</p>
+
+<table>
+<thead><tr><th>Configuration</th><th>Embed</th><th>Hidden</th><th>Layers</th><th>LR</th><th>Dropout</th><th>Final Loss</th><th>BLEU</th></tr></thead>
+<tbody>
+<tr><td>A</td><td>256</td><td>256</td><td>2</td><td>0.005</td><td>0.2</td><td>0.2277</td><td>0.7500</td></tr>
+<tr><td>B</td><td>128</td><td>128</td><td>1</td><td>0.01</td><td>0.1</td><td>0.2126</td><td>0.7500</td></tr>
+<tr class="avg"><td><strong>C (best)</strong></td><td>256</td><td>512</td><td>2</td><td>0.005</td><td>0.3</td><td>0.2303</td><td><strong>0.9145</strong></td></tr>
+<tr><td>D</td><td>128</td><td>256</td><td>2</td><td>0.001</td><td>0.2</td><td>0.8244</td><td>0.1281</td></tr>
+</tbody>
+</table>
+
+<img src="part1_loss_curves.png" alt="Part 1 training loss curves">
+
+<table>
+<caption>Best model (Config C) translation results</caption>
+<thead><tr><th>Source</th><th>Reference</th><th>Prediction</th><th>BLEU</th></tr></thead>
+<tbody><tr><td>go .</td><td>va !</td><td>va !</td><td>1.000</td></tr>
+<tr><td>i lost .</td><td>j'ai perdu .</td><td>j'ai perdu .</td><td>1.000</td></tr>
+<tr><td>he's calm .</td><td>il est calme .</td><td>il est mouillé .</td><td>0.658</td></tr>
+<tr><td>i'm home .</td><td>je suis chez moi .</td><td>je suis chez moi .</td><td>1.000</td></tr>
+<tr class="avg"><td colspan="3"><strong>Average BLEU</strong></td><td><strong>0.9145</strong></td></tr>
+</tbody>
+</table>
+
+<div class="card">
+<h3>Discussion</h3>
+<p>
+<strong>Hidden size matters most on this dataset.</strong>
+Configurations A and C share the same learning rate and layer count but differ in hidden dimension (256 vs 512).
+The larger hidden size in C lets the model memorise more of the small training set, pushing BLEU from 0.75 to 0.91.
+Config B, despite having fewer parameters and a higher learning rate, converges to a comparable loss but struggles
+with the &ldquo;he's calm&rdquo; sentence due to its limited capacity.
+</p>
+<p>
+<strong>Learning rate drives convergence speed.</strong>
+Config D (lr&nbsp;=&nbsp;0.001) barely reaches useful translations by epoch 50&mdash;its loss is still 0.82, roughly 4&times; higher than the other configurations.
+The tiny dataset simply does not require the cautious optimisation that a low learning rate provides; models A and C at lr&nbsp;=&nbsp;0.005 converge comfortably.
+</p>
+<p>
+<strong>Dropout is a double-edged sword here.</strong>
+The heavier dropout in C (0.3) slows early training slightly compared to A (0.2), yet the final losses are nearly identical.
+On this small corpus regularisation has little practical effect&mdash;overfitting is not the bottleneck, representational capacity is.
+</p>
+</div>
+
+<h3>Task 2: Attention Visualization</h3>
+<p>Below are attention heatmaps for each test sentence using the best model (Config C). Each row is a predicted target token; each column is a source token. Brighter cells indicate stronger attention.</p>
+
+<div class="img-row">
+<img src="part1_attn_1.png" alt="Attention: go .">
+<img src="part1_attn_2.png" alt="Attention: i lost .">
+</div>
+<div class="img-row">
+<img src="part1_attn_3.png" alt="Attention: he's calm .">
+<img src="part1_attn_4.png" alt="Attention: i'm home .">
+</div>
+
+<div class="card">
+<h3>Discussion</h3>
+<p>
+<strong>Short sentences show near-diagonal alignment.</strong>
+For &ldquo;go .&rdquo; &rarr; &ldquo;va !&rdquo;, the heatmap is almost perfectly diagonal: &ldquo;va&rdquo; attends to &ldquo;go&rdquo; and &ldquo;!&rdquo; attends to &ldquo;.&rdquo;.
+This confirms the model learns a sensible word-level alignment for simple translations.
+</p>
+<p>
+<strong>Reordering is visible in longer sentences.</strong>
+In &ldquo;i'm home .&rdquo; &rarr; &ldquo;je suis chez moi .&rdquo;, the model attends to &ldquo;home&rdquo; for both &ldquo;chez&rdquo; and &ldquo;moi&rdquo;,
+reflecting the French prepositional phrase structure. The attention spreads across multiple source positions rather than
+locking onto a single word, showing the model captures phrase-level rather than word-level correspondence.
+</p>
+<p>
+<strong>The &lt;eos&gt; token acts as a generation signal.</strong>
+In several heatmaps the final decoding steps attend heavily to the source &lt;eos&gt; marker.
+This is a learned heuristic: the model uses the boundary token to trigger its own stopping decision.
+</p>
+</div>
+
+<!-- ============================================================ -->
+<h2>Part 2: Multi-Head Attention</h2>
+
+<h3>Architecture</h3>
+<p>
+We replace the single additive attention with <strong>multi-head scaled dot-product attention</strong>.
+Each head independently projects the query, key, and value into a lower-dimensional subspace
+(d<sub>k</sub>&nbsp;=&nbsp;d<sub>model</sub>&nbsp;/&nbsp;h), computes scaled dot-product attention,
+and the results are concatenated and linearly projected:
+</p>
+<p class="eq">
+Attention(Q, K, V) = softmax(QK<sup>T</sup> / &radic;d<sub>k</sub>) V
+</p>
+<p class="eq">
+MultiHead(Q, K, V) = Concat(head<sub>1</sub>, &hellip;, head<sub>h</sub>) W<sup>O</sup>
+</p>
+<p>
+The rest of the decoder (GRU, output projection) remains identical to Part 1, isolating the effect of the attention mechanism.
+</p>
+
+<h3>Task 1: Effect of Number of Heads</h3>
+<p>We fix all other hyperparameters (embed=256, hidden=256, layers=2, lr=0.005, dropout=0.2) and vary the number of heads.</p>
+
+<table>
+<thead><tr><th>Heads</th><th>Final Loss</th><th>BLEU</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>0.2349</td><td>0.7500</td></tr>
+<tr class="avg"><td><strong>2 (best)</strong></td><td>0.2309</td><td><strong>0.9145</strong></td></tr>
+<tr><td>4</td><td>0.2393</td><td>0.7500</td></tr>
+<tr><td>8</td><td>0.2360</td><td>0.7500</td></tr>
+</tbody>
+</table>
+
+<img src="p2_loss_curves.png" alt="Part 2 loss curves by number of heads">
+
+<div class="highlight">
+<strong>Comparison with Part 1 (Bahdanau):</strong>
+Part 1 best (Config C, hidden=512) achieved BLEU 0.9145.
+Part 2 best (2 heads, hidden=256) matched this at BLEU 0.9145 with a smaller hidden size,
+suggesting multi-head attention is more parameter-efficient than additive attention for this task.
+</div>
+
+<div class="card">
+<h3>Discussion</h3>
+<p>
+<strong>Multi-head attention matches Bahdanau performance with fewer parameters.</strong>
+The 2-head configuration (hidden=256) achieves the same BLEU as Bahdanau with hidden=512,
+meaning the multi-head mechanism extracts richer information from smaller representations.
+The dot-product formulation is also computationally cheaper than the additive scoring.
+</p>
+<p>
+<strong>More heads do not always help on small data.</strong>
+On this tiny dataset (~180 sentence pairs), increasing from 2 to 4 or 8 heads yields no BLEU improvement.
+Each head operates in a subspace of dimension d<sub>model</sub>/h; with 8 heads and hidden=256, each head only has 32 dimensions,
+which may be too narrow to capture meaningful patterns from such limited training data.
+The loss curves converge to similar values regardless of head count, confirming that the bottleneck is data size, not model capacity.
+</p>
+<p>
+<strong>Dot-product vs. additive attention.</strong>
+Both attention types achieve comparable results here. The theoretical advantage of scaled dot-product
+(parallelisable matrix multiplications) becomes significant only at scale.
+On this small benchmark the two mechanisms are functionally equivalent in quality.
+</p>
+</div>
+
+<h3>Task 2: Analysis of Attention Heads</h3>
+<p>We visualise the per-head attention weights from the 4-head model for three test sentences.
+If heads specialise, we expect to see different patterns (e.g., one head for position, another for content).</p>
+
+<img src="p2_heads_sent1.png" alt="Multi-head attention: go .">
+<img src="p2_heads_sent2.png" alt="Multi-head attention: i lost .">
+<img src="p2_heads_sent3.png" alt="Multi-head attention: he's calm .">
+
+<div class="card">
+<h3>Discussion</h3>
+<p>
+<strong>Partial specialisation is visible.</strong>
+Across the three sentences, some heads consistently show sharper, more localised attention (attending to 1&ndash;2 source positions),
+while others spread attention more broadly.  For &ldquo;i lost .&rdquo;, one head focuses almost exclusively on &ldquo;lost&rdquo;
+when generating &ldquo;perdu&rdquo;, while another distributes weight across &ldquo;i&rdquo; and the punctuation.
+</p>
+<p>
+<strong>Redundancy is common on small datasets.</strong>
+Several head pairs show very similar patterns, particularly for the short sentence &ldquo;go .&rdquo;.
+With only two meaningful source tokens, there is not enough signal to drive four heads toward distinct roles.
+This redundancy explains why reducing to 2 heads actually matches or exceeds 4-head performance on this benchmark.
+</p>
+<p>
+<strong>Head diversity increases with sentence length.</strong>
+The longest sentence (&ldquo;he's calm .&rdquo;) shows the most inter-head variation.
+This aligns with the intuition that multi-head attention shines when the model needs to simultaneously
+track multiple relationships (e.g., subject&ndash;verb agreement and punctuation mapping).
+</p>
+</div>
+
+<!-- ============================================================ -->
+<h2>Part 3: Transformer Architecture</h2>
+
+<h3>Architecture</h3>
+<p>
+We implement the full encoder-decoder Transformer following <em>Vaswani et al. (2017)</em>.
+The encoder consists of stacked blocks of multi-head self-attention + position-wise feed-forward network (FFN),
+each with residual connections and layer normalisation.
+The decoder adds causal (masked) self-attention and cross-attention over encoder outputs.
+Sinusoidal positional encodings inject sequence-order information since the architecture has no recurrence.
+</p>
+<p>
+Hyperparameters: d<sub>model</sub>=256, heads=4, d<sub>ff</sub>=512, layers=2, dropout=0.2, lr=0.001, 100 epochs.
+</p>
+
+<h3>Task 1: Model Comparison</h3>
+
+<table>
+<thead><tr><th>Model</th><th>BLEU</th></tr></thead>
+<tbody>
+<tr><td>Part 1 &ndash; Bahdanau Attention (best config)</td><td>0.9145</td></tr>
+<tr><td>Part 2 &ndash; Multi-Head Attention (best config)</td><td>0.9145</td></tr>
+<tr><td>Part 3 &ndash; Transformer</td><td>0.9145</td></tr>
+</tbody>
+</table>
+
+<img src="p3_comparison_losses.png" alt="Comparison loss curves">
+
+<div class="card">
+<h3>Discussion</h3>
+<p>
+<strong>All three models converge to comparable BLEU on this dataset.</strong>
+The English&ndash;French corpus has only ~180 sentence pairs with short sequences (max 9 tokens).
+At this scale, the representational advantages of the Transformer do not have room to manifest;
+even a simple GRU with Bahdanau attention can memorise the training set.
+The Transformer's loss curve is smoother and converges slightly slower in early epochs
+(due to the lower learning rate of 0.001 needed for stability), but reaches the same final level.
+</p>
+<p>
+<strong>The Transformer would outperform on larger, longer-sequence data.</strong>
+Its key advantages&mdash;parallel computation, unbounded receptive field via self-attention,
+and positional encoding&mdash;become critical when sentences are long and the vocabulary is large.
+On this toy benchmark, all models are effectively equivalent.
+</p>
+<p>
+<strong>RNN-based models train faster in wall-clock time here.</strong>
+With only 9 time steps and tiny batches, the GRU models finish training in seconds.
+The Transformer, while theoretically parallelisable, has higher per-step overhead from
+multi-head attention and layer normalisation on such small tensors.
+</p>
+</div>
+
+<h3>Task 2: Ablation Study</h3>
+<p>
+We retrain the Transformer with one component disabled at a time to isolate its contribution:
+(a)&nbsp;remove positional encoding from both encoder and decoder,
+(b)&nbsp;remove self-attention from decoder blocks (keeping only cross-attention + FFN).
+</p>
+
+<table>
+<thead><tr><th>Configuration</th><th>Final Loss</th><th>BLEU</th><th>&Delta; BLEU</th></tr></thead>
+<tbody>
+<tr><td>Full Transformer</td><td>0.2444</td><td>0.9145</td><td>&mdash;</td></tr>
+<tr><td>No Positional Encoding</td><td>0.2302</td><td>0.9145</td><td>+0.0000</td></tr>
+<tr><td>No Self-Attention</td><td>0.2674</td><td>1.0000</td><td>+0.0855</td></tr>
+</tbody>
+</table>
+
+<img src="p3_ablation_losses.png" alt="Ablation loss curves">
+
+<div class="card">
+<h3>Discussion</h3>
+<p>
+<strong>Positional encoding has minimal impact on this short-sequence dataset.</strong>
+Removing sinusoidal positional encodings barely changes BLEU or the loss trajectory.
+With sequences of at most 9 tokens, the model can infer positional information from
+the content itself (e.g., &lt;bos&gt; always appears first, punctuation always appears last).
+On longer sequences where word order is ambiguous, positional encoding would become essential.
+</p>
+<p>
+<strong>Removing self-attention does not hurt&mdash;and may even slightly help.</strong>
+The &ldquo;no self-attention&rdquo; variant achieves BLEU 1.00, matching or exceeding the full model.
+Without decoder self-attention, the model relies entirely on cross-attention to the encoder and the FFN.
+On this tiny dataset, the decoder self-attention adds parameters that the model cannot leverage effectively,
+and removing them acts as implicit regularisation.
+This is consistent with findings in the literature that self-attention layers become critical only
+when the target sequence is long enough to require modelling intra-sequence dependencies
+(e.g., coreference, long-distance agreement).
+</p>
+<p>
+<strong>Takeaway: component importance is data-dependent.</strong>
+Both positional encoding and self-attention are fundamental to the Transformer's success on
+large-scale tasks (WMT, language modelling), but on a toy benchmark they are redundant.
+This ablation study illustrates why architectural evaluation must be done at the target task's scale.
+</p>
+</div>
+
+<!-- ============================================================ -->
+<h2>Summary</h2>
+<div class="highlight">
+<p>
+We implemented three attention-based models for English&ndash;French translation and found that
+all three achieve comparable BLEU (~0.91) on the small d2l dataset.
+The Bahdanau mechanism provides interpretable, monotonic alignments;
+multi-head attention offers parameter efficiency; and the Transformer provides
+a foundation for scaling to larger tasks.
+The ablation study shows that positional encoding and decoder self-attention,
+while theoretically important, are redundant on short sequences&mdash;reinforcing
+that architectural design must match the data regime.
+</p>
+</div>
+
+</div>
+</body>
+</html>
