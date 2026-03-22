@@ -32,15 +32,24 @@
 <div class="container">
 
 <h1>Project 3: Attention and Transformers</h1>
-<p class="meta">Haopeng Chen &middot; CSCI 689 &middot; Spring 2026 &middot; University of Mississippi</p>
+<p class="meta">Haopeng Chen &middot; Spring 2026 &middot; University of Mississippi</p>
 
 <p>
 This project explores the core building blocks of modern attention-based architectures for neural machine translation on an English&ndash;French dataset.
-We implement three progressively more powerful models: (1)&nbsp;a GRU-based encoder-decoder with <strong>Bahdanau additive attention</strong>,
+We implement three progressively more powerful models: (1)&nbsp;a GRU-based encoder-decoder with <strong>Bahdanau additive attention</strong> (Bahdanau et al., 2015),
 (2)&nbsp;the same architecture with <strong>multi-head scaled dot-product attention</strong>,
-and (3)&nbsp;a full <strong>Transformer</strong> encoder-decoder.
-Each model is trained, evaluated (BLEU), and analysed through attention visualisations and ablation studies.
+and (3)&nbsp;a full <strong>Transformer</strong> encoder-decoder (Vaswani et al., 2017).
+Each model is trained, evaluated via sentence-level BLEU, and analysed through attention visualisations and ablation studies.
 </p>
+
+<div class="card" style="font-size:0.9rem;">
+<h3>Experimental Setup</h3>
+<p>
+<strong>Dataset.</strong> The English&ndash;French translation corpus from d2l (~180 sentence pairs, max 9 tokens per sentence). No separate validation split is used; training loss is monitored directly.
+<strong>Evaluation.</strong> Sentence-level BLEU (k=2 n-grams) averaged over four held-out test pairs from Project&nbsp;2, using greedy decoding. Because the test set is very small, BLEU scores should be interpreted as rough indicators rather than precise performance measures.
+<strong>Optimiser.</strong> Adam with gradient clipping (max norm = 1.0). All experiments are single-run (no seed averaging), so minor score differences may reflect randomness.
+</p>
+</div>
 
 <!-- ============================================================ -->
 <h2>Part 1: Bahdanau Attention Mechanism</h2>
@@ -87,21 +96,27 @@ and this context vector at each step, allowing it to dynamically focus on releva
 <div class="card">
 <h3>Discussion</h3>
 <p>
-<strong>Hidden size matters most on this dataset.</strong>
-Configurations A and C share the same learning rate and layer count but differ in hidden dimension (256 vs 512).
-The larger hidden size in C lets the model memorise more of the small training set, pushing BLEU from 0.75 to 0.91.
-Config B, despite having fewer parameters and a higher learning rate, converges to a comparable loss but struggles
-with the &ldquo;he's calm&rdquo; sentence due to its limited capacity.
+<strong>Hidden size is the primary differentiator.</strong>
+Configs A and C share the same learning rate and layer count but differ in hidden dimension (256 vs 512).
+The larger hidden size in C pushes BLEU from 0.75 to 0.91, suggesting that on this small dataset,
+the model needs sufficient capacity to memorise the training patterns that matter for correct translation.
 </p>
 <p>
-<strong>Learning rate drives convergence speed.</strong>
-Config D (lr&nbsp;=&nbsp;0.001) barely reaches useful translations by epoch 50&mdash;its loss is still 0.82, roughly 4&times; higher than the other configurations.
-The tiny dataset simply does not require the cautious optimisation that a low learning rate provides; models A and C at lr&nbsp;=&nbsp;0.005 converge comfortably.
+<strong>Loss and BLEU can be decoupled.</strong>
+An interesting finding is that lower training loss does not guarantee higher BLEU.
+Config B achieves the lowest final loss (0.213) yet the same BLEU (0.75) as Config A (loss 0.228).
+Conversely, the best-BLEU Config C has a slightly higher loss (0.230) than both A and B.
+This suggests that token-level cross-entropy and sequence-level BLEU optimise different aspects of translation quality&mdash;a model can fit the token distribution well but still make critical errors on specific words (e.g., &ldquo;he's calm&rdquo;), while a model with slightly worse average loss may translate the key content words correctly.
 </p>
 <p>
-<strong>Dropout is a double-edged sword here.</strong>
-The heavier dropout in C (0.3) slows early training slightly compared to A (0.2), yet the final losses are nearly identical.
-On this small corpus regularisation has little practical effect&mdash;overfitting is not the bottleneck, representational capacity is.
+<strong>Learning rate is critical for convergence within a fixed epoch budget.</strong>
+Config D (lr&nbsp;=&nbsp;0.001) barely reaches useful translations by epoch 50&mdash;its loss is still 0.82, roughly 4&times; higher than other configs.
+The small dataset does not benefit from cautious optimisation; lr&nbsp;=&nbsp;0.005 converges comfortably.
+</p>
+<p>
+<strong>Dropout has limited effect on this corpus.</strong>
+Configs A (dropout 0.2) and C (dropout 0.3) reach nearly identical final losses despite different regularisation strengths.
+With only ~180 sentence pairs, overfitting is not the bottleneck&mdash;representational capacity is.
 </p>
 </div>
 
@@ -175,17 +190,18 @@ The rest of the decoder (GRU, output projection) remains identical to Part 1, is
 <div class="highlight">
 <strong>Comparison with Part 1 (Bahdanau):</strong>
 Part 1 best (Config C, hidden=512) achieved BLEU 0.9145.
-Part 2 best (2 heads, hidden=256) matched this at BLEU 0.9145 with a smaller hidden size,
-suggesting multi-head attention is more parameter-efficient than additive attention for this task.
+Part 2 best (2 heads, hidden=256) matched this at BLEU 0.9145 with a smaller hidden size.
+Note that the comparison is not strictly controlled (different hidden sizes and parameter counts), so this is an observation rather than a definitive efficiency claim.
 </div>
 
 <div class="card">
 <h3>Discussion</h3>
 <p>
-<strong>Multi-head attention matches Bahdanau performance with fewer parameters.</strong>
-The 2-head configuration (hidden=256) achieves the same BLEU as Bahdanau with hidden=512,
-meaning the multi-head mechanism extracts richer information from smaller representations.
-The dot-product formulation is also computationally cheaper than the additive scoring.
+<strong>Multi-head attention achieves comparable BLEU at a smaller hidden size.</strong>
+The 2-head configuration (hidden=256) matches the Bahdanau model that required hidden=512 to reach the same BLEU.
+While this hints at better parameter utilisation by the dot-product mechanism, we did not control for total parameter count,
+so the observation should be interpreted cautiously. The dot-product formulation is computationally cheaper than additive scoring,
+which may become relevant at larger scale.
 </p>
 <p>
 <strong>More heads do not always help on small data.</strong>
@@ -271,9 +287,9 @@ The Transformer's loss curve is smoother and converges slightly slower in early 
 (due to the lower learning rate of 0.001 needed for stability), but reaches the same final level.
 </p>
 <p>
-<strong>The Transformer would outperform on larger, longer-sequence data.</strong>
-Its key advantages&mdash;parallel computation, unbounded receptive field via self-attention,
-and positional encoding&mdash;become critical when sentences are long and the vocabulary is large.
+<strong>The Transformer would likely outperform on larger, longer-sequence data.</strong>
+Its key advantages&mdash;parallel computation, global attention over all positions in a single layer,
+and explicit positional encoding&mdash;become critical when sentences are long and the vocabulary is large.
 On this toy benchmark, all models are effectively equivalent.
 </p>
 <p>
@@ -287,16 +303,18 @@ multi-head attention and layer normalisation on such small tensors.
 <h3>Task 2: Ablation Study</h3>
 <p>
 We retrain the Transformer with one component disabled at a time to isolate its contribution:
-(a)&nbsp;remove positional encoding from both encoder and decoder,
-(b)&nbsp;remove self-attention from decoder blocks (keeping only cross-attention + FFN).
 </p>
+<ul style="margin: 0.5rem 0 1rem 1.5rem;">
+<li><strong>No Positional Encoding:</strong> sinusoidal positional encodings removed from <em>both</em> encoder and decoder. Without these, the self-attention layers are permutation-invariant and cannot distinguish token order from architecture alone.</li>
+<li><strong>No Decoder Self-Attention:</strong> masked self-attention removed from <em>decoder blocks only</em>. Each decoder block retains cross-attention over encoder outputs and the feed-forward network. The encoder remains unchanged.</li>
+</ul>
 
 <table>
 <thead><tr><th>Configuration</th><th>Final Loss</th><th>BLEU</th><th>&Delta; BLEU</th></tr></thead>
 <tbody>
 <tr><td>Full Transformer</td><td>0.2444</td><td>0.9145</td><td>&mdash;</td></tr>
 <tr><td>No Positional Encoding</td><td>0.2302</td><td>0.9145</td><td>+0.0000</td></tr>
-<tr><td>No Self-Attention</td><td>0.2674</td><td>1.0000</td><td>+0.0855</td></tr>
+<tr><td>No Decoder Self-Attention</td><td>0.2674</td><td>1.0000</td><td>+0.0855</td></tr>
 </tbody>
 </table>
 
@@ -305,27 +323,30 @@ We retrain the Transformer with one component disabled at a time to isolate its 
 <div class="card">
 <h3>Discussion</h3>
 <p>
-<strong>Positional encoding has minimal impact on this short-sequence dataset.</strong>
+<strong>Positional encoding has minimal impact on these short sequences.</strong>
 Removing sinusoidal positional encodings barely changes BLEU or the loss trajectory.
-With sequences of at most 9 tokens, the model can infer positional information from
-the content itself (e.g., &lt;bos&gt; always appears first, punctuation always appears last).
+Strictly speaking, self-attention without positional encoding is permutation-invariant and cannot distinguish word order from architecture alone.
+However, on sequences of at most 9 tokens, order can be partially inferred from content cues (e.g., &lt;bos&gt; always starts the sequence, punctuation appears at the end), and the dataset is small enough that the model memorises the training pairs regardless.
 On longer sequences where word order is ambiguous, positional encoding would become essential.
 </p>
 <p>
-<strong>Removing self-attention does not hurt&mdash;and may even slightly help.</strong>
-The &ldquo;no self-attention&rdquo; variant achieves BLEU 1.00, matching or exceeding the full model.
-Without decoder self-attention, the model relies entirely on cross-attention to the encoder and the FFN.
-On this tiny dataset, the decoder self-attention adds parameters that the model cannot leverage effectively,
-and removing them acts as implicit regularisation.
-This is consistent with findings in the literature that self-attention layers become critical only
-when the target sequence is long enough to require modelling intra-sequence dependencies
-(e.g., coreference, long-distance agreement).
+<strong>Removing decoder self-attention does not degrade BLEU on this dataset.</strong>
+The &ldquo;no decoder self-attention&rdquo; variant achieves BLEU 1.00 on the four test sentences.
+However, this result should be interpreted with caution: the evaluation set consists of only four short sentence pairs, and this is a single-run experiment without seed averaging, so the difference from the full model (0.91 vs 1.00) likely reflects random variation rather than a genuine architectural advantage.
+Mechanistically, without decoder self-attention, the model becomes a source-conditioned model where each target position depends only on the encoder output and the FFN, without explicit modelling of target-side dependencies.
+On formulaic, short target sentences, this can work well&mdash;but on longer sequences requiring coreference resolution or long-distance agreement, decoder self-attention would be critical.
 </p>
 <p>
-<strong>Takeaway: component importance is data-dependent.</strong>
-Both positional encoding and self-attention are fundamental to the Transformer's success on
-large-scale tasks (WMT, language modelling), but on a toy benchmark they are redundant.
-This ablation study illustrates why architectural evaluation must be done at the target task's scale.
+<strong>Loss and BLEU again diverge.</strong>
+The &ldquo;no decoder self-attention&rdquo; variant has the <em>highest</em> final loss (0.267) among the three configurations, yet the highest BLEU.
+This mirrors the pattern observed in Part 1 and reinforces that token-level loss and sequence-level BLEU measure different aspects of translation quality.
+A model with fewer parameters may have higher average loss but still produce correct translations for the specific test sentences.
+</p>
+<p>
+<strong>Takeaway: component importance is data-regime-dependent.</strong>
+Both positional encoding and decoder self-attention are fundamental to the Transformer's success on
+large-scale tasks (e.g., WMT benchmarks, language modelling), but on a toy dataset with short sequences they are redundant.
+This ablation illustrates why architectural conclusions must be drawn at the target task's scale&mdash;results on ~180 sentence pairs do not generalise to production-scale translation.
 </p>
 </div>
 
@@ -343,6 +364,13 @@ while theoretically important, are redundant on short sequences&mdash;reinforcin
 that architectural design must match the data regime.
 </p>
 </div>
+
+<h2>References</h2>
+<ul style="list-style: none; padding: 0; font-size: 0.93rem;">
+<li style="margin-bottom:0.5rem;">Bahdanau, D., Cho, K., &amp; Bengio, Y. (2015). Neural Machine Translation by Jointly Learning to Align and Translate. <em>ICLR 2015</em>.</li>
+<li style="margin-bottom:0.5rem;">Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., Kaiser, &Lstrok;., &amp; Polosukhin, I. (2017). Attention Is All You Need. <em>NeurIPS 2017</em>.</li>
+<li style="margin-bottom:0.5rem;">Zhang, A., Lipton, Z. C., Li, M., &amp; Smola, A. J. (2023). <em>Dive into Deep Learning</em>. Cambridge University Press.</li>
+</ul>
 
 </div>
 </body>
